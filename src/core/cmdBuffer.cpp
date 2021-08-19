@@ -125,7 +125,8 @@ CmdBuffer::CmdBuffer(
     m_p2pBltWaInfo(device.GetPlatform()),
     m_p2pBltWaLastChunkAddr(0),
     m_device(device),
-    m_recordState(CmdBufferRecordState::Reset)
+    m_recordState(CmdBufferRecordState::Reset),
+    m_knownCmdAllocGeneration(0)
 #if PAL_ENABLE_PRINTS_ASSERTS
     ,
     m_uniqueId(0),
@@ -272,9 +273,17 @@ Result CmdBuffer::Begin(
                     (((settings.cmdBufOptimizePm4 == Pm4OptDefaultEnable) && m_buildFlags.optimizeGpuSmallBatch) ||
                      (settings.cmdBufOptimizePm4 == Pm4OptForceEnable));
 
+                // If the command allocator was reset we need to clean up our chunk lists.
+                bool cmdAllocatorWasReset = m_pCmdAllocator->GetGeneration() != m_knownCmdAllocGeneration;
                 // If the app explicitly called "reset" on this command buffer, there's no need to do another reset
                 // on the command streams.
-                result = BeginCommandStreams(cmdStreamflags, m_recordState != CmdBufferRecordState::Reset);
+                bool doReset = m_recordState != CmdBufferRecordState::Reset || cmdAllocatorWasReset;
+                result = BeginCommandStreams(cmdStreamflags, doReset);
+
+                // Update the known generation. It needs to be updated
+                // after all of the potential chunk list operations have finished
+                // because inheriting cmd buffers use it to detect chunk list invalidation.
+                m_knownCmdAllocGeneration = m_pCmdAllocator->GetGeneration();
             }
 
             if (result == Result::Success)
@@ -861,7 +870,11 @@ void CmdBuffer::ReturnDataChunks(
     CmdAllocType type,
     bool         returnGpuMemory)
 {
-    if (m_device.Settings().cmdAllocatorFreeOnReset)
+    // If cmd allocator was reset we only need to clean up our chunk
+    // list because the chunks have already been reclaimed.
+    bool cmdAllocatorWasReset = GetKnownCmdAllocGeneration() != m_pCmdAllocator->GetGeneration();
+
+    if (m_device.Settings().cmdAllocatorFreeOnReset || cmdAllocatorWasReset)
     {
         pData->retainedChunks.Clear();
     }
@@ -899,7 +912,10 @@ void CmdBuffer::ReturnDataChunks(
                     iter.Get()->RemoveCommandStreamReference();
                 }
 
-                m_pCmdAllocator->ReuseChunks(type, false, pData->chunkList.Begin());
+                m_pCmdAllocator->ReuseChunks(type,
+                                             false,
+                                             pData->chunkList.Begin(),
+                                             m_knownCmdAllocGeneration);
             }
         }
         else
@@ -932,7 +948,7 @@ void CmdBuffer::ReturnLinearAllocator()
         // If our linear allocator came from our ICmdAllocator's internal pool we should try to return it.
         if (m_flags.internalMemAllocator)
         {
-            m_pCmdAllocator->ReuseLinearAllocator(m_pMemAllocator);
+            m_pCmdAllocator->ReuseLinearAllocator(m_pMemAllocator, GetKnownCmdAllocGeneration());
         }
 
         m_pMemAllocator = nullptr;

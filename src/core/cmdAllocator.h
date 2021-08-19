@@ -61,6 +61,11 @@ public:
 
     virtual Result Reset() override;
 
+    // Returns the generation nubmer that is increased each reset.
+    // CmdBuffers will use this to determine when to clear their chunk lists as
+    // opposed to returning them during resets.
+    uint64 GetGeneration() const { return m_generation; }
+
     // CmdBuffers and CmdStreams will use these public functions to interact with the CmdAllocator.
     Result GetNewChunk(CmdAllocType allocType, bool systemMemory, CmdStreamChunk** ppChunk);
 
@@ -69,7 +74,11 @@ public:
     CmdStreamChunk* GetDummyChunk() const { return m_pDummyChunkAllocation->Chunks(); }
 
     // CmdStreamChunk(s) are returned back to the allocator for use with the reuse-list.
-    void ReuseChunks(CmdAllocType allocType, bool systemMemory, VectorIter iter);
+    // allocatorGeneration is the generation number of the allocator (obtained with GetGeneration()) that was
+    // used when the caller started getting chunks. It is used to check that the
+    // caller has not missed an allocator reset.
+    void ReuseChunks(CmdAllocType allocType, bool systemMemory, VectorIter iter, uint64 allocatorGeneration);
+
 
     // CmdBuffers will call this to get an internal linear allocator at Begin time. Null will be returned if a new
     // linear allocator could not be created.
@@ -78,7 +87,10 @@ public:
     // Once a CmdBuffer that called GetNewLinearAllocator is done with its allocator, it must call this to return the
     // internal linear allocator. Depending on how the CmdBuffer is being used this might be done at End or Reset time
     // but may be as late as Destroy time.
-    void ReuseLinearAllocator(Util::VirtualLinearAllocator* pReuseAllocator);
+    // allocatorGeneration is the generation number of the allocator (obtained with GetGeneration()) that was
+    // used when the caller started getting chunks. It is used to check that the
+    // caller has not missed an allocator reset.
+    void ReuseLinearAllocator(Util::VirtualLinearAllocator* pReuseAllocator, uint64 allocatorGeneration);
 
     // The size of chunk it returns is in byte unit.
     uint32 ChunkSize(CmdAllocType allocType) const { return m_gpuAllocInfo[allocType].allocCreateInfo.chunkSize; }
@@ -165,6 +177,10 @@ private:
 
     // Dummy chunk used to handle cases where we've run out of GPU memory.
     CmdStreamAllocation* m_pDummyChunkAllocation;
+
+    // Stores generation number that is increased each time this
+    // allocator is reset.
+    uint64 m_generation;
 
     PAL_DISALLOW_DEFAULT_CTOR(CmdAllocator);
     PAL_DISALLOW_COPY_AND_ASSIGN(CmdAllocator);

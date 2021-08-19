@@ -307,6 +307,12 @@ private:
     gpusize  m_totalChunkDwords;    // The sum of all allocated chunk space.  Before End() is called on this chunk,
                                     // this does not include the current chunk.  After End() is called, it does.
 
+
+    // Stores the last known reset count from m_pCmdAllocator. If this
+    // number differs from the alocator it means that the allocator has been reset
+    // and our stored chunks are not valid anymore.
+    uint64   m_knownCmdAllocGeneration;
+
 #if PAL_ENABLE_PRINTS_ASSERTS
     uint32  m_streamGeneration; // Counter used for tracking stream reset before submit.
     bool    m_isReserved;       // Used to validate that reserve and commit are always called in pairs.

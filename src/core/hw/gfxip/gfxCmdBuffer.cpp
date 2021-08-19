@@ -323,7 +323,11 @@ Result GfxCmdBuffer::BeginCommandStreams(
 void GfxCmdBuffer::ReturnGeneratedCommandChunks(
     bool returnGpuMemory)
 {
-    if (m_device.CoreSettings().cmdAllocatorFreeOnReset)
+    // If cmd allocator was invalidated we only need to clear our chunk
+    // lists.
+    bool cmdAllocatorWasReset = GetKnownCmdAllocGeneration() != m_pCmdAllocator->GetGeneration();
+
+    if (m_device.CoreSettings().cmdAllocatorFreeOnReset || cmdAllocatorWasReset)
     {
         m_retainedGeneratedChunkList.Clear();
     }
@@ -346,7 +350,10 @@ void GfxCmdBuffer::ReturnGeneratedCommandChunks(
                 iter.Get()->RemoveCommandStreamReference();
             }
 
-            m_pCmdAllocator->ReuseChunks(EmbeddedDataAlloc, false, m_generatedChunkList.Begin());
+            m_pCmdAllocator->ReuseChunks(EmbeddedDataAlloc,
+                                         false,
+                                         m_generatedChunkList.Begin(),
+                                         GetKnownCmdAllocGeneration());
         }
     }
     else

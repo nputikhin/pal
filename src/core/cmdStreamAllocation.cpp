@@ -374,12 +374,21 @@ void CmdStreamChunk::FinalizeCommands()
 // =====================================================================================================================
 // Reset the chunk so that we can use it again as part of a new command stream. This validates the chunk's reference
 // count, increments its generation, and resets its busy tracker.
+// allowOutstandingReferences allows to reset the reference count of
+// a chunk with outstanding referenes.
 void CmdStreamChunk::Reset(
-    bool resetRefCount)
+    bool resetRefCount, bool allowOutstandingReferences)
 {
     // DX12 does not permit reference counting in command chunks by the command allocator. Hence reference counting is
     // disabled for DX12 builds. The chunk must not have any outstanding references if we're resetting it.
-    PAL_ASSERT((resetRefCount == false) || (m_referenceCount == 0));
+    //
+    // allowOutstandingReferences disables the reference count check.
+    // By default in Vk the chunk should not have any outstanding references when
+    // its refcount is reset (it is expected that the refcount reset
+    // essentially does nothing). However, when we expect the users to not rely
+    // on the chunk anymore and clean their references themselves we want to
+    // allow the situation with resetting a non-zero refcount.
+    PAL_ASSERT((resetRefCount == false) || (m_referenceCount == 0) || (allowOutstandingReferences == true));
 
     if (resetRefCount)
     {

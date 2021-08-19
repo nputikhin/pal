@@ -66,7 +66,8 @@ CmdStream::CmdStream(
     m_pReserveBuffer(nullptr),
     m_nestedChunks(32, pDevice->GetPlatform()),
     m_status(Result::Success),
-    m_totalChunkDwords(0)
+    m_totalChunkDwords(0),
+    m_knownCmdAllocGeneration(0)
 #if PAL_ENABLE_PRINTS_ASSERTS
     , m_streamGeneration(0)
     , m_isReserved(false)
@@ -148,6 +149,8 @@ Result CmdStream::Begin(
 {
     m_flags.prefetchCommands = flags.prefetchCommands;
     m_flags.optimizeCommands = flags.optimizeCommands;
+
+    m_knownCmdAllocGeneration = m_pCmdAllocator->GetGeneration();
 
     // Save the caller's memory allocator for later use.
     m_pMemAllocator = pMemAllocator;
@@ -438,6 +441,21 @@ void CmdStream::Reset(
     {
         m_retainedChunkList.Clear();
     }
+    else if (m_knownCmdAllocGeneration != m_pCmdAllocator->GetGeneration())
+    {
+        // Retaining memory or switching allocators is not expected in
+        // the case of cmd allocator reset. It is a potentially valid situation
+        // and this code may be modified to handle it if needed.
+        PAL_ASSERT(pNewAllocator == nullptr || pNewAllocator == m_pCmdAllocator);
+        PAL_ASSERT(returnGpuMemory);
+
+
+        // If cmd allocator generation has changed, the allocator was reset and
+        // we only need to clear our chunk lists.
+        m_retainedChunkList.Clear();
+
+        m_knownCmdAllocGeneration = m_pCmdAllocator->GetGeneration();
+    }
     else if (returnGpuMemory)
     {
         // The client requested that we return all chunks, add any remaining retained chunks to the chunk list so they
@@ -459,7 +477,10 @@ void CmdStream::Reset(
             // if any error occurs, the memory allocated before might be useless and need to be free.
             if (m_status == Result::Success)
             {
-                m_pCmdAllocator->ReuseChunks(CommandDataAlloc, (m_flags.buildInSysMem != 0), m_chunkList.Begin());
+                m_pCmdAllocator->ReuseChunks(CommandDataAlloc,
+                                             (m_flags.buildInSysMem != 0),
+                                             m_chunkList.Begin(),
+                                             m_knownCmdAllocGeneration);
             }
         }
     }

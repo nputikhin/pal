@@ -95,7 +95,8 @@ CmdAllocator::CmdAllocator(
     m_pChunkLock(nullptr),
     m_lastPagingFence(0),
     m_pLinearAllocLock(nullptr),
-    m_pDummyChunkAllocation(nullptr)
+    m_pDummyChunkAllocation(nullptr),
+    m_generation(0)
 {
 #if PAL_ENABLE_PRINTS_ASSERTS
     memset(m_pHistograms, 0, sizeof(m_pHistograms));
@@ -284,7 +285,7 @@ void CmdAllocator::TransferChunks(
             // trackers in builds with asserts enabled.
             PAL_ASSERT((TrackBusyChunks() == false) || iter.Get()->IsIdleOnGpu());
 
-            iter.Get()->Reset(true);
+            iter.Get()->Reset(true, true);
         }
 
         pFreeList->PushFrontList(pSrcList);
@@ -437,6 +438,8 @@ Result CmdAllocator::Reset()
         m_pChunkLock->Lock();
     }
 
+    ++m_generation;
+
     if (freeOnReset)
     {
         // We've been asked to simply destroy all of our allocations on each reset.
@@ -487,8 +490,17 @@ Result CmdAllocator::Reset()
 void CmdAllocator::ReuseChunks(
     CmdAllocType   allocType,
     bool           systemMemory,
-    VectorIter     iter)         // [in] A valid iterator to the first element in the vector of chunk refs.
+    VectorIter     iter,         // [in] A valid iterator to the first element in the vector of chunk refs.
+    uint64         allocatorGeneration) // [in] The allocator generation active when the chunks were allocated.
 {
+    // If the generation expected by the caller does not match it
+    // indicates an error in the reset tracking logic. Issue an assert and
+    // ignore the returned chunks.
+    PAL_ASSERT(allocatorGeneration == m_generation);
+    if (allocatorGeneration != m_generation) {
+        return;
+    }
+
     // System memory allocations are only allowed for command data!
     PAL_ASSERT((systemMemory == false) || (allocType == CommandDataAlloc));
 
@@ -806,8 +818,17 @@ VirtualLinearAllocator* CmdAllocator::GetNewLinearAllocator()
 
 // =====================================================================================================================
 void CmdAllocator::ReuseLinearAllocator(
-    VirtualLinearAllocator* pReuseAllocator)
+    VirtualLinearAllocator* pReuseAllocator,
+    uint64 allocatorGeneration)
 {
+    // If the generation expected by the caller does not match it
+    // indicates an error in the reset tracking logic. Issue an assert and
+    // ignore the returned allocator.
+    PAL_ASSERT(allocatorGeneration == m_generation);
+    if (allocatorGeneration != m_generation) {
+        return;
+    }
+
     if (AutomaticMemoryReuse())
     {
         auto*const pAllocator = static_cast<VirtualLinearAllocatorWithNode*>(pReuseAllocator);

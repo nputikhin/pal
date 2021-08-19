@@ -954,6 +954,12 @@ protected:
         uint32      payloadSize) override
         { PAL_NEVER_CALLED(); }
 
+
+    // Returns the last known reset count from m_pCmdAllocator. If this
+    // number differs from the alocator it means that the allocator has been reset
+    // and our stored chunks are not valid anymore.
+    uint64 GetKnownCmdAllocGeneration() const { return m_knownCmdAllocGeneration; }
+
     const CmdBufferCreateInfo     m_createInfo;
     CmdBufferInternalCreateInfo   m_internalInfo;
     CmdBufferBuildFlags           m_buildFlags;
@@ -1023,6 +1029,11 @@ private:
 
     const Device&          m_device;
     CmdBufferRecordState   m_recordState;
+
+    // Stores the last known reset count from m_pCmdAllocator. If this
+    // number differs from the alocator it means that the allocator has been reset
+    // and our stored chunks are not valid anymore.
+    uint64                 m_knownCmdAllocGeneration;
 
 #if PAL_ENABLE_PRINTS_ASSERTS
     // These member variables are only for command buffer dumping support.

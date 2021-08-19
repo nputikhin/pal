@@ -329,8 +329,13 @@ void ComputeQueueContext::ClearDeferredMemory()
         // Now return the chunks to command allocator
         if (chunksToReturn.IsEmpty() == false)
         {
-            m_pDevice->Parent()->InternalUntrackedCmdAllocator()->ReuseChunks(
-                CommandDataAlloc, false, chunksToReturn.Begin());
+            // Always use the current generation here because we don't
+            // worry about the allocator reset.
+            auto pCmdAllocator = m_pDevice->Parent()->InternalUntrackedCmdAllocator();
+            pCmdAllocator->ReuseChunks(CommandDataAlloc,
+                                       false,
+                                       chunksToReturn.Begin(),
+                                       pCmdAllocator->GetGeneration());
         }
     }
 }
@@ -1130,8 +1135,13 @@ void UniversalQueueContext::ClearDeferredMemory()
         // Now return the chunks to command allocator
         if (chunksToReturn.IsEmpty() == false)
         {
-            m_pDevice->Parent()->InternalUntrackedCmdAllocator()->ReuseChunks(
-                CommandDataAlloc, false, chunksToReturn.Begin());
+            // Always use the current generation here because we don't
+            // worry about the allocator reset.
+            auto pCmdAllocator = m_pDevice->Parent()->InternalUntrackedCmdAllocator();
+            pCmdAllocator->ReuseChunks(CommandDataAlloc,
+                                       false,
+                                       chunksToReturn.Begin(),
+                                       pCmdAllocator->GetGeneration());
         }
     }
 }

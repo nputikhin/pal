@@ -144,7 +144,10 @@ public:
 
     void EndCommandBlock(uint32 postambleDwords);
     void FinalizeCommands();
-    void Reset(bool resetRefCount);
+
+    // allowOutstandingReferences allows to reset the reference count of
+    // a chunk with outstanding referenes.
+    void Reset(bool resetRefCount, bool allowOutstandingReferences = false);
 
     Result InitRootBusyTracker(CmdAllocator* pAllocator);
     void UpdateRootInfo(CmdStreamChunk* pRootChunk);
