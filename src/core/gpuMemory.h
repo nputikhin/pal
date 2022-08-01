@@ -236,7 +236,12 @@ public:
     MType Mtype() const { return m_mtype; }
 
     // Returns the preferred heap.
-    GpuHeap PreferredHeap() const { PAL_ASSERT(m_heapCount > 0); return m_heaps[0]; }
+    GpuHeap PreferredHeap() const {
+        // Virtual memory is not backed by a heap, so there can be no preferred heap.
+        PAL_ASSERT_MSG(!IsVirtual(), "Getting preferred heap of virtual memory is invalid");
+        PAL_ASSERT(m_heapCount > 0);
+        return m_heaps[0];
+    }
 
     bool IsVirtual()             const { return (m_desc.flags.isVirtual           != 0); }
     bool IsPeer()                const { return (m_desc.flags.isPeer              != 0); }

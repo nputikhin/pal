@@ -3453,7 +3453,9 @@ uint32 Gfx9RsrcProcMgr::HwlBeginGraphicsCopy(
     const auto&          settings     = m_pDevice->Settings();
     uint32               modifiedMask = 0;
 
-    if (pGpuMem != nullptr)
+    // For virtual GPU memory allocations,
+    // there are no heaps because there are no physical memory pages backing the allocation.
+    if ((pGpuMem != nullptr) && (pGpuMem->IsVirtual() == false))
     {
         const GpuHeap preferredHeap = pGpuMem->PreferredHeap();
 
